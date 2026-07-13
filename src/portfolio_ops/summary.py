@@ -35,6 +35,10 @@ def _rate(results: list[CheckResult], latest_date: date, days: int) -> float | N
 
 def _render_target(result: CheckResult, records: list[CheckResult]) -> list[str]:
     latest_date = date.fromisoformat(result.checked_date)
+    tls_days = result.tls_days_remaining if result.tls_days_remaining is not None else "not checked"
+    security_score = (
+        f"{result.security_score}%" if result.security_score is not None else "not checked"
+    )
     lines = [
         f"### {result.target_name}",
         "",
@@ -42,6 +46,9 @@ def _render_target(result: CheckResult, records: list[CheckResult]) -> list[str]
         f"- Last checked: {result.checked_at}",
         f"- Latest HTTP code: {result.status_code if result.status_code is not None else 'none'}",
         f"- Latest response time: {result.response_time_ms} ms",
+        f"- Observation count: {len(records)} scheduled checks",
+        f"- TLS days remaining: {tls_days}",
+        f"- Security-header posture: {security_score}",
     ]
     for days in (7, 30):
         rate = _rate(records, latest_date, days)
@@ -68,7 +75,7 @@ def generate_summary_files(
         "",
     ]
     if not latest:
-        lines.extend(["No public checks have been recorded yet.", ""])
+        lines.extend(["No live checks have been recorded yet.", ""])
     grouped: dict[str, list[CheckResult]] = defaultdict(list)
     for result in results:
         grouped[result.target_name].append(result)

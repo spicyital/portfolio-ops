@@ -9,8 +9,17 @@ import sys
 from pathlib import Path
 
 from .config import ConfigurationError, load_targets
-from .http_check import check_target
-from .storage import append_unique_results, load_results
+from .dashboard import build_dashboard
+from .github_issues import sync_incident_issues
+from .monitor import monitor_targets
+from .observability import write_observability_outputs
+from .storage import (
+    append_detailed_checks,
+    append_unique_results,
+    load_detailed_checks,
+    load_results,
+    migrate_csv_to_detailed,
+)
 from .summary import generate_summary_files
 
 LOGGER = logging.getLogger("portfolio_ops")
@@ -21,10 +30,21 @@ def _data_paths(data_dir: Path) -> tuple[Path, Path, Path]:
     return data_dir / "uptime.csv", data_dir / "latest-status.json", data_dir / "status-summary.md"
 
 
-def _run_check(config_path: Path | None, data_dir: Path, timeout: float) -> int:
+def _history(data_dir: Path):
+    migrate_csv_to_detailed(data_dir / "uptime.csv", data_dir / "checks.jsonl")
+    detailed = load_detailed_checks(data_dir / "checks.jsonl")
+    return detailed or load_results(data_dir / "uptime.csv")
+
+
+def _run_check(
+    config_path: Path | None,
+    data_dir: Path,
+    timeout: float,
+    target_name: str | None,
+    issue_alerts: bool,
+) -> int:
     targets = load_targets(config_path=config_path)
-    LOGGER.info("monitor_start target_count=%d timeout_seconds=%s", len(targets), timeout)
-    results = [check_target(target, timeout=timeout) for target in targets]
+    results = monitor_targets(targets, target_name, timeout)
     for result in results:
         LOGGER.info(
             "monitor_result target=%s status=%s success=%s error=%s latency_ms=%d",
@@ -35,16 +55,31 @@ def _run_check(config_path: Path | None, data_dir: Path, timeout: float) -> int:
             result.response_time_ms,
         )
     uptime_path, latest_path, markdown_path = _data_paths(data_dir)
-    changed = append_unique_results(uptime_path, results)
-    generate_summary_files(load_results(uptime_path), latest_path, markdown_path)
-    LOGGER.info("monitor_complete csv_changed=%s", changed)
+    csv_changed = append_unique_results(uptime_path, results)
+    detail_changed = append_detailed_checks(data_dir / "checks.jsonl", results)
+    history = _history(data_dir)
+    generate_summary_files(history, latest_path, markdown_path)
+    metrics, incidents = write_observability_outputs(data_dir, history, targets)
+    if issue_alerts:
+        import os
+
+        os.environ["MONITOR_ISSUE_ALERTS"] = "true"
+        sync_incident_issues(incidents)
+    LOGGER.info(
+        "monitor_complete csv_changed=%s detailed_changed=%s services=%d",
+        csv_changed,
+        detail_changed,
+        len(metrics),
+    )
     return 0
 
 
 def _run_summary(data_dir: Path) -> int:
     uptime_path, latest_path, markdown_path = _data_paths(data_dir)
-    generate_summary_files(load_results(uptime_path), latest_path, markdown_path)
-    LOGGER.info("summary_generated result_count=%d", len(load_results(uptime_path)))
+    history = _history(data_dir)
+    generate_summary_files(history, latest_path, markdown_path)
+    write_observability_outputs(data_dir, history, load_targets())
+    LOGGER.info("summary_generated result_count=%d", len(history))
     return 0
 
 
@@ -67,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--timeout", type=float, default=10.0, help="per-target request timeout in seconds"
     )
+    check.add_argument("--target", help="check one configured target by normalized name")
+    check.add_argument(
+        "--issue-alerts", action="store_true", help="enable Actions-only incident issue automation"
+    )
     summary = subcommands.add_parser(
         "summary", help="rebuild latest JSON and Markdown status summary"
     )
@@ -77,6 +116,21 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument(
         "--data-dir", type=Path, default=PROJECT_ROOT / "data", help="directory for generated data"
     )
+    incidents = subcommands.add_parser("incidents", help="print current public incident records")
+    incidents.add_argument("--data-dir", type=Path, default=PROJECT_ROOT / "data")
+    dashboard = subcommands.add_parser(
+        "build-dashboard", help="generate static public dashboard assets"
+    )
+    dashboard.add_argument("--data-dir", type=Path, default=PROJECT_ROOT / "data")
+    dashboard.add_argument("--output", type=Path, default=PROJECT_ROOT / "site")
+    validate = subcommands.add_parser(
+        "validate-config", help="validate target configuration without networking"
+    )
+    validate.add_argument("--config", type=Path)
+    compact = subcommands.add_parser(
+        "compact-history", help="compact detailed JSONL checks older than 90 days"
+    )
+    compact.add_argument("--data-dir", type=Path, default=PROJECT_ROOT / "data")
     return parser
 
 
@@ -89,9 +143,44 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "check":
             if arguments.timeout <= 0:
                 raise ConfigurationError("Timeout must be greater than zero.")
-            return _run_check(arguments.config, arguments.data_dir, arguments.timeout)
+            return _run_check(
+                arguments.config,
+                arguments.data_dir,
+                arguments.timeout,
+                arguments.target,
+                arguments.issue_alerts,
+            )
         if arguments.command == "summary":
             return _run_summary(arguments.data_dir)
+        if arguments.command == "validate-config":
+            print(
+                json.dumps(
+                    [
+                        {"name": target.name, "url": target.url}
+                        for target in load_targets(arguments.config)
+                    ],
+                    indent=2,
+                )
+            )
+            return 0
+        if arguments.command == "compact-history":
+            append_detailed_checks(arguments.data_dir / "checks.jsonl", [])
+            return _run_summary(arguments.data_dir)
+        if arguments.command == "build-dashboard":
+            metrics, incidents = write_observability_outputs(
+                arguments.data_dir, _history(arguments.data_dir), load_targets()
+            )
+            build_dashboard(metrics, incidents, arguments.output)
+            LOGGER.info("dashboard_built output=%s", arguments.output)
+            return 0
+        if arguments.command == "incidents":
+            path = arguments.data_dir / "incidents.json"
+            print(
+                path.read_text(encoding="utf-8")
+                if path.exists()
+                else '{"schema_version": 1, "incidents": []}'
+            )
+            return 0
         latest_path = arguments.data_dir / "latest-status.json"
         if not latest_path.exists():
             raise FileNotFoundError(f"No latest status file exists at {latest_path}.")

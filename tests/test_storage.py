@@ -54,7 +54,7 @@ def test_cli_check_runs_with_a_mocked_public_target(tmp_path):
         "",
     )
 
-    with patch("portfolio_ops.cli.check_target", return_value=monitored):
+    with patch("portfolio_ops.cli.monitor_targets", return_value=[monitored]):
         exit_code = main(["check", "--config", str(config_path), "--data-dir", str(tmp_path)])
 
     assert exit_code == 0

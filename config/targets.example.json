@@ -1,6 +1,16 @@
 [
   {
     "name": "wrepo",
-    "url": "https://wrepo.net"
+    "display_name": "WRepo",
+    "url": "https://wrepo.net",
+    "enabled": true,
+    "expected_statuses": [200],
+    "timeout_seconds": 15,
+    "expected_text": "WRepo",
+    "check_dns": true,
+    "check_tls": true,
+    "check_security_headers": true,
+    "latency_warning_ms": 1500,
+    "failure_threshold": 2
   }
 ]

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .models import CheckResult
@@ -84,10 +86,16 @@ def write_results(path: Path, results: list[CheckResult]) -> None:
     writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, lineterminator="\n")
     writer.writeheader()
     for result in sorted(results, key=_sort_key):
-        row = result.to_dict()
-        row["status_code"] = "" if result.status_code is None else str(result.status_code)
-        row["response_time_ms"] = str(result.response_time_ms)
-        row["success"] = str(result.success).lower()
+        row = {
+            "utc_date": result.checked_date,
+            "checked_at": result.checked_at,
+            "target_name": result.target_name,
+            "url": result.url,
+            "status_code": "" if result.status_code is None else str(result.status_code),
+            "response_time_ms": str(result.response_time_ms),
+            "success": str(result.success).lower(),
+            "error_type": result.error_type,
+        }
         writer.writerow(row)
     _atomic_write_text(path, buffer.getvalue())
 
@@ -111,3 +119,62 @@ def append_unique_results(path: Path, new_results: list[CheckResult]) -> bool:
 def atomic_write_text(path: Path, content: str) -> None:
     """Expose the safe text writer for JSON and Markdown summary outputs."""
     _atomic_write_text(path, content)
+
+
+def load_detailed_checks(path: Path) -> list[CheckResult]:
+    """Validate and load schema-v1 JSON Lines checks without response content."""
+    if not path.exists():
+        return []
+    records: list[CheckResult] = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+            if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+                raise ValueError("unsupported schema")
+            records.append(CheckResult.from_dict(payload))
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"checks.jsonl is corrupt at line {number}.") from error
+    return sorted(records, key=lambda item: (item.checked_at, item.check_id))
+
+
+def append_detailed_checks(
+    path: Path, checks: list[CheckResult], retention_days: int = 90, now: datetime | None = None
+) -> bool:
+    """Append unique checks and atomically compact only expired detailed history."""
+    if retention_days < 1:
+        raise ValueError("retention_days must be positive.")
+    current = datetime.now(UTC) if now is None else now.astimezone(UTC)
+    cutoff = current - timedelta(days=retention_days)
+    existing = load_detailed_checks(path)
+    merged = {record.check_id: record for record in existing}
+    before = set(merged)
+    for record in checks:
+        merged.setdefault(record.check_id, record)
+    retained = [
+        record
+        for record in merged.values()
+        if datetime.fromisoformat(record.checked_at.replace("Z", "+00:00")) >= cutoff
+    ]
+    retained.sort(key=lambda item: (item.checked_at, item.check_id))
+    changed = set(record.check_id for record in retained) != before or bool(
+        checks and not path.exists()
+    )
+    if changed:
+        _atomic_write_text(
+            path,
+            "".join(
+                json.dumps(record.to_dict(), sort_keys=True, separators=(",", ":")) + "\n"
+                for record in retained
+            ),
+        )
+    return changed
+
+
+def migrate_csv_to_detailed(csv_path: Path, detailed_path: Path) -> bool:
+    """Seed detailed history from the legacy CSV once, preserving every CSV field."""
+    if detailed_path.exists():
+        return False
+    legacy = load_results(csv_path)
+    return append_detailed_checks(detailed_path, legacy) if legacy else False

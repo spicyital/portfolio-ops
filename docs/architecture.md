@@ -6,4 +6,6 @@
 
 `portfolio_ops.storage` parses the historical CSV, rejects malformed schemas, detects duplicate `(target name, UTC date)` pairs, sorts records consistently, and writes replacements through a temporary file in the destination directory followed by an atomic replace. `portfolio_ops.summary` derives the latest result per target and cautious 7-/30-day rates only when enough dates exist.
 
-The daily workflow tests the package before it checks public URLs. It uses the repository-scoped `GITHUB_TOKEN` with `contents: write`, then commits only changed generated data with the GitHub Actions bot identity. No personal access token or secret is required.
+The monitor coordinates DNS safety, HTTP, bounded content assertion, TLS metadata, and header posture into a typed check record. JSONL stores 90-day detailed history; the existing CSV remains the daily compatibility record. Metrics and incidents are deterministic derivatives, and the dashboard consumes only their sanitized JSON.
+
+The four-times-daily workflow tests the package before it checks public URLs. It uses the repository-scoped `GITHUB_TOKEN` with `contents: write` and optional `issues: write`, then commits only changed generated data with the GitHub Actions bot identity. No personal access token or secret is required.
