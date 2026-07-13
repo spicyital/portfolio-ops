@@ -27,13 +27,12 @@ This project observes public endpoints at scheduled intervals. It does not prove
 
 ```mermaid
 flowchart LR
-    A[Public target configuration] --> B[Daily GitHub Actions run]
-    B --> C[Unauthenticated HTTP GET]
-    C --> D[Normalized status metadata]
-    D --> E[Deduplicate by target + UTC date]
-    E --> F[data/uptime.csv]
-    F --> G[latest-status.json + status-summary.md]
-    G --> H[Bot commits changed generated data]
+    A[Public target configuration] --> B[Scheduled GitHub Actions run]
+    B --> C[DNS safety, HTTP, TLS, and header checks]
+    C --> D[Sanitized normalized metadata]
+    D --> E[CSV, JSONL, metrics, and incidents]
+    E --> F[Static status dashboard]
+    E --> G[Bot commits changed generated data]
 ```
 
 The monitor uses Python's standard library and stores only the UTC date/time, sanitized public URL, target name, HTTP status, elapsed milliseconds, success flag, and a short error category. It does not retain a page body, cookies, headers, credentials, identifiers, or infrastructure information. See [architecture](docs/architecture.md) and [privacy](docs/privacy.md).
@@ -60,13 +59,13 @@ python -m portfolio_ops.cli --help
 
 ## GitHub Actions
 
-`daily-monitor.yml` runs at 03:17 UTC daily and can also be launched from **Actions → Daily public-service monitor → Run workflow**. It tests the package first, uses the standard `GITHUB_TOKEN`, and creates `chore(monitor): record daily public-service status` only when generated status data differs.
+`daily-monitor.yml` runs at 00:17, 06:17, 12:17, and 18:17 UTC and can also be launched from **Actions > Daily public-service monitor > Run workflow**. It tests the package first, uses the standard `GITHUB_TOKEN`, and creates `chore(monitor): record daily public-service status` only when generated status data differs.
 
-To enable automated pushes, go to **Settings → Actions → General → Workflow permissions** and select **Read and write permissions**. The workflow declares only `contents: write`; no personal access token is used. Ensure the default branch's protection rules allow GitHub Actions to push, or allow that bot in the rule.
+To enable automated pushes and incident alerts, go to **Settings > Actions > General > Workflow permissions** and select **Read and write permissions**. The monitoring workflow declares `contents: write` and `issues: write`; no personal access token is used. Ensure the default branch's protection rules allow GitHub Actions to push, or allow that bot in the rule.
 
 Add production targets through the repository variable `MONITOR_TARGETS_JSON`; details and the Chrome Web Store example are in [adding targets](docs/adding-targets.md). A future Impact extension listing is treated strictly as a public availability page.
 
-GitHub issue alerting is optional and runs only in Actions when `--issue-alerts` is supplied. It uses the built-in `GITHUB_TOKEN`, creates an issue only after the configured failure threshold, and closes the matching issue after two recovery checks. Enable GitHub Pages in **Settings → Pages → Build and deployment → GitHub Actions** to publish the dashboard.
+GitHub issue alerting is optional and runs only in Actions when `--issue-alerts` is supplied. It uses the built-in `GITHUB_TOKEN`, creates an issue only after the configured failure threshold, and closes the matching issue after two recovery checks. Enable GitHub Pages in **Settings > Pages > Build and deployment > GitHub Actions** to publish the dashboard.
 
 ## Data and status reporting
 
