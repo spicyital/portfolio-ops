@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portfolio-ops"
+version = "0.1.0"
+description = "Privacy-first daily availability monitoring for public portfolio services."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Portfolio Ops contributors" }]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+portfolio-ops = "portfolio_ops.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest-tmp"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["batterybenchmark"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
