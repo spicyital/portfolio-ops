@@ -2,9 +2,16 @@
 
 Repository: <https://github.com/spicyital/portfolio-ops>
 
+[![CI](https://github.com/spicyital/portfolio-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/spicyital/portfolio-ops/actions/workflows/ci.yml)
+[![Daily public-service monitor](https://github.com/spicyital/portfolio-ops/actions/workflows/daily-monitor.yml/badge.svg)](https://github.com/spicyital/portfolio-ops/actions/workflows/daily-monitor.yml)
+
 Portfolio Ops is a small, privacy-first monitoring project for publicly accessible portfolio services. It checks each configured URL once per day, records a concise availability result, and keeps a version-controlled history that is easy to inspect.
 
 > **This repository monitors only publicly accessible URLs. It does not access WRepo source code, databases, student submissions, personal information, authenticated pages, or private infrastructure.**
+
+## Current status
+
+See the [current public-service status](data/status-summary.md). No uptime percentage is claimed until live daily monitoring has produced sufficient history.
 
 ## Architecture
 
