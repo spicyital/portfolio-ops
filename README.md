@@ -77,11 +77,3 @@ python -m portfolio_ops.cli --help
 
 All network access is mocked in tests. Coverage includes successful responses, redirect behavior, HTTP errors, timeouts, DNS/connection failures, malformed configuration, atomic CSV creation, historic-row preservation, duplicate prevention, latest-status generation, multiple targets, and Chrome Web Store-style URLs.
 
-## Privacy, limitations, and roadmap
-
-Portfolio Ops never accesses WRepo's private source repository, databases, authenticated pages, submissions, student records, user accounts, internal APIs, or non-public information. It never uses production secrets or stores page contents.
-
-It is intentionally a lightweight once-daily availability signal, not a synthetic transaction monitor, performance benchmark, or uptime SLA. A failed check can reflect a temporary network path issue and does not diagnose the target.
-
-Planned extensions include adding the public Impact Chrome Web Store listing, adding further public portfolio demos or APIs, and presenting the existing non-sensitive summary in a static project page.
-
