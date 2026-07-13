@@ -78,6 +78,3 @@ It is intentionally a lightweight once-daily availability signal, not a syntheti
 
 Planned extensions include adding the public Impact Chrome Web Store listing, adding further public portfolio demos or APIs, and presenting the existing non-sensitive summary in a static project page.
 
-## Resume-ready description
-
-Built **Portfolio Ops**, a privacy-first Python and GitHub Actions monitoring system that performs daily public endpoint health checks, normalizes failure modes, atomically persists version-controlled status data, and automatically commits transparent availability summaries without accessing private application data.
